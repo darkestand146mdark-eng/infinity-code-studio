@@ -1,0 +1,170 @@
+
+function App() {
+  const [files, setFiles] = useState([]);
+  const [currentPath, setCurrentPath] = useState('');
+  const [fileContent, setFileContent] = useState('');
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [serverStatus, setServerStatus] = useState('checking');
+
+  // Server Status Check
+\  useEffect(() => {
+    fetch(`${API_URL}/`)
+      .then(res => res.json())
+      .then(data => setServerStatus(data.success ? 'online' : 'offline'))
+      .catch(() => setServerStatus('offline'));
+  }, []);
+
+  // Files ki list load karein
+  const loadFiles = async (dir = '') => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/workspace/list?dir=${dir}`);
+      const data = await res.json();
+      if (data.success) {
+        setFiles(data.files);
+        setCurrentPath(dir);
+        setSelectedFile(null);
+        setFileContent('');
+      }
+    } catch (err) {
+      alert('Server se connect nahi ho paya.');
+    }
+    setLoading(false);
+  };
+
+  // File ka content padhein
+  const openFile = async (path) => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/workspace/file?path=${path}`);
+      const data = await res.json();
+        setFileContent(data.content);
+        setSelectedFile(path);
+      }
+    } catch (err) {
+      alert('File read nahi ho payi');
+    }
+    setLoading(false);
+  };
+
+  // File save karein
+  const saveFile = async () => {
+    if (!selectedFile) return;
+    setLoading(true);
+    try {
+      await fetch(`${API_URL}/workspace/file`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filePath: selectedFile, content: fileContent })
+      });
+      alert('✅ File Save Ho Gayi!');
+    } catch (err) {
+      alert('Save nahi ho payi');
+    }
+    setLoading(false);
+  };
+
+  // Nayi file banayein
+  const createFile = async () => {
+    const name = prompt('Nayi file ka naam likhein (jaise: test.js):');
+    if (!name) return;
+    const fullPath = currentPath ? `${currentPath}/${name}` : name;
+    try {
+      await fetch(`${API_URL}/workspace/file`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filePath: fullPath, content: '' })
+      });
+      loadFiles(currentPath);
+    } catch (err) {
+      alert('File nahi ban payi');
+    }
+  };
+
+  // Nayi folder banayein
+  const createFolder = async () => {
+    const name = prompt('Nayi folder ka naam likhein:');
+    if (!name) return;
+    const fullPath = currentPath ? `${currentPath}/${name}` : name;
+    try {
+      await fetch(`${API_URL}/workspace/folder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folderPath: fullPath })
+      });
+      loadFiles(currentPath);
+    } catch (err) {
+      alert('Folder nahi ban paya');
+    }
+  };
+
+  // File/Folder delete karein
+  const deleteItem = async (path, name) => {
+    if (!window.confirm(`Kya aap "${name}" ko delete karna chahte hain?`)) return;
+    try {
+      await fetch(`${API_URL}/workspace?path=${path}`, {
+        method: 'DELETE'
+      });
+      loadFiles(currentPath);
+    } catch (err) {
+      alert('Delete nahi ho paya');
+    }
+  };
+
+  // File rename karein
+  const renameItem = async (oldPath, oldName) => {
+    const newName = prompt('Naya naam likhein:', oldName);
+    if (!newName || newName === oldName) return;
+    const newPath = currentPath ? `${currentPath}/${newName}` : newName;
+    try {
+      await fetch(`${API_URL}/workspace/file/rename`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ oldPath, newPath })
+      });
+      loadFiles(currentPath);
+    } catch (err) {
+      alert('Rename nahi ho paya');
+    }
+  };
+
+  useEffect(() => {
+    loadFiles('');
+  }, []);
+
+  return (
+    <div style={{ display: 'flex', height: '100vh', fontFamily: 'Arial', background: '#1e1e1e' }}>
+      
+      {/* Sidebar - Files List */}
+      <div style={{ width: '280px', background: '#252526', color: 'white', padding: '15px', overflowY: 'scroll', borderRight: '1px solid #333' }}>
+        
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+          <h3 style={{ margin: 0, fontSize: '16px' }}>📁 Explorer</h3>
+          <span style={{ 
+            fontSize: '10px', 
+            padding: '3px 8px', 
+            borderRadius: '10px',
+            background: serverStatus === 'online' ? '#4caf50' : '#f44336'
+          }}>
+            {serverStatus === 'online' ? '🟢 Online' : '🔴 Offline'}
+          </span>
+        </div>
+
+        {/* Action Buttons */}
+        <div style={{ display: 'flex', gap: '5px', marginBottom: '15px' }}>
+          <button onClick={createFile} style={btnStyle}>+ File</button>
+          <button onClick={createFolder} style={btnStyle}>+ Folder</button>
+        </div>
+
+        {currentPath && (
+          <button onClick={() => loadFiles('')} style={{ ...btnStyle, width: '100%', marginBottom: '10px', background: '#555' }}>
+            ← Wapas (Root)
+          </button>
+        )}
+
+        {loading && <p style={{ fontSize: '12px', color: '#aaa' }}>Loading...</p>}
+
+        {/* File List */}
+        {files.length === 0 && !loading && (
+          <p style={{ fontSize: '12px', color: '#888' }}>Koi file nahi hai. Nayi file banayein.</p>k
